@@ -29,7 +29,9 @@ export default function LoginPage() {
 				const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
 				const decrypted = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
 				if (decrypted && decrypted.user_userLevel === "Admin") {
-					navigate("/admin/AdminDashboard");
+					navigate("/AdminDashboard");
+				} else if (decrypted && decrypted.user_userLevel === "Registrar") {
+					navigate("/RegistrarDashboard");
 				}
 			} catch (e) {
 				// Invalid cookie, ignore
@@ -48,7 +50,14 @@ export default function LoginPage() {
 					SECRET_KEY
 				).toString();
 				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
-				navigate("/admin/AdminDashboard");
+				navigate("/AdminDashboard");
+			} else if (user && user.user_userLevel === "Registrar") {
+				const encrypted = CryptoJS.AES.encrypt(
+					JSON.stringify(user),
+					SECRET_KEY
+				).toString();
+				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
+				navigate("/RegistrarDashboard");
 			} else {
 				alert("Not an admin or invalid credentials");
 			}
@@ -63,14 +72,24 @@ export default function LoginPage() {
 		<div className="flex justify-center items-center p-4 w-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
 			<div className="flex overflow-hidden w-full max-w-4xl rounded-lg shadow-lg bg-white/80">
 				{/* Left side: Image */}
-				<div className="hidden relative flex-col justify-center items-center w-1/2 text-white md:flex bg-slate-900">
-					<div className="flex flex-col justify-center items-center p-8 w-full h-full">
-						{/* Replace src with your image if needed */}
-						<img
-							src="https://placehold.co/400x400?text=Image"
-							alt="Login Visual"
-							className="object-contain w-3/4 h-3/4 opacity-80"
-						/>
+				<div className="hidden relative flex-col justify-center items-center w-1/2 text-white bg-gradient-to-br md:flex from-slate-900 to-slate-800">
+					<div className="flex flex-col justify-center items-center w-full h-full">
+						<div className="flex flex-col items-center">
+							<img
+								src="/images/mogchs.jpg"
+								alt="MOGCHS Logo"
+								className="object-contain mb-6 w-48 h-48 rounded-full border-4 border-white shadow-xl bg-white/90"
+								style={{ boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)" }}
+							/>
+							<div className="text-center">
+								<h2 className="mb-1 text-2xl font-bold tracking-wide text-white drop-shadow">
+									Misamis Oriental General Comprehensive High School
+								</h2>
+								<p className="text-sm italic drop-shadow text-slate-200">
+									Cagayan de Oro City
+								</p>
+							</div>
+						</div>
 					</div>
 				</div>
 

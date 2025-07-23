@@ -6,7 +6,7 @@ import CryptoJS from "crypto-js";
 const COOKIE_KEY = "mogchs_user";
 const SECRET_KEY = "mogchs_secret_key";
 
-export default function PrivateRoute({ children }) {
+export default function PrivateRoute({ children, allowedRole }) {
 	const encrypted = Cookies.get(COOKIE_KEY);
 	if (!encrypted) {
 		return <Navigate to="/" replace />;
@@ -14,7 +14,7 @@ export default function PrivateRoute({ children }) {
 	try {
 		const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
 		const user = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-		if (!user || user.user_userLevel !== "Admin") {
+		if (!user || user.user_userLevel !== allowedRole) {
 			return <Navigate to="/" replace />;
 		}
 		return children;
