@@ -21,10 +21,10 @@ import {
 import Cookies from "js-cookie";
 import CryptoJS from "crypto-js";
 import toast, { Toaster } from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 export default function StudentDashboard() {
-	const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
-	const [sidebarMobile, setSidebarMobile] = useState(false);
+	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [showRequestForm, setShowRequestForm] = useState(false);
 	const [selectedDocument, setSelectedDocument] = useState("");
 	const [purpose, setPurpose] = useState("");
@@ -32,6 +32,8 @@ export default function StudentDashboard() {
 	const [loadingDocs, setLoadingDocs] = useState(false);
 	const [userRequests, setUserRequests] = useState([]);
 	const [loadingRequests, setLoadingRequests] = useState(false);
+	const [selectedFiles, setSelectedFiles] = useState([]);
+	const navigate = useNavigate();
 
 	// Get userId from cookie
 	const COOKIE_KEY = "mogchs_user";
@@ -80,30 +82,146 @@ export default function StudentDashboard() {
 		{ icon: <User className="w-5 h-5" />, label: "Profile" },
 	];
 
-	const documentTypes = [
-		"Form 137 (Permanent Record)",
-		"Form 138 (Report Card)",
-		"Certificate of Good Moral Character",
-		"Transcript of Records",
-		"Diploma Copy",
-		"Certificate of Enrollment",
-	];
+	// Initialize sidebar state based on screen size
+	React.useEffect(() => {
+		const handleResize = () => {
+			if (window.innerWidth >= 1024) {
+				// Desktop - sidebar should be open by default
+				setSidebarOpen(true);
+			}
+		};
+
+		// Set initial state
+		handleResize();
+
+		// Add event listener
+		window.addEventListener("resize", handleResize);
+
+		// Cleanup
+		return () => window.removeEventListener("resize", handleResize);
+	}, []);
+
+	const logout = () => {
+		Cookies.remove("mogchs_user");
+		navigate("/");
+	};
+
+	const handleFileChange = (e) => {
+		const files = Array.from(e.target.files);
+		if (files.length > 0) {
+			// Validate file type
+			const allowedTypes = [
+				"image/jpeg",
+				"image/jpg",
+				"image/png",
+				"image/gif",
+				"application/pdf",
+			];
+			const invalidFiles = files.filter(
+				(file) => !allowedTypes.includes(file.type)
+			);
+			if (invalidFiles.length > 0) {
+				toast.error(
+					"Invalid file type. Only JPG, PNG, GIF, and PDF files are allowed."
+				);
+				e.target.value = "";
+				return;
+			}
+
+			// Validate file size (5MB max)
+			const largeFiles = files.filter((file) => file.size > 5 * 1024 * 1024);
+			if (largeFiles.length > 0) {
+				toast.error("File size too large. Maximum size is 5MB.");
+				e.target.value = "";
+				return;
+			}
+
+			setSelectedFiles(files);
+		}
+	};
+
+	const handleAddMoreFiles = (e) => {
+		const newFiles = Array.from(e.target.files);
+		if (newFiles.length > 0) {
+			// Validate file type
+			const allowedTypes = [
+				"image/jpeg",
+				"image/jpg",
+				"image/png",
+				"image/gif",
+				"application/pdf",
+			];
+			const invalidFiles = newFiles.filter(
+				(file) => !allowedTypes.includes(file.type)
+			);
+			if (invalidFiles.length > 0) {
+				toast.error(
+					"Invalid file type. Only JPG, PNG, GIF, and PDF files are allowed."
+				);
+				e.target.value = "";
+				return;
+			}
+
+			// Validate file size (5MB max)
+			const largeFiles = newFiles.filter((file) => file.size > 5 * 1024 * 1024);
+			if (largeFiles.length > 0) {
+				toast.error("File size too large. Maximum size is 5MB.");
+				e.target.value = "";
+				return;
+			}
+
+			// Check for duplicate files by name
+			const existingFileNames = selectedFiles.map((file) => file.name);
+			const duplicateFiles = newFiles.filter((file) =>
+				existingFileNames.includes(file.name)
+			);
+
+			if (duplicateFiles.length > 0) {
+				toast.warning(
+					`Duplicate files detected: ${duplicateFiles
+						.map((f) => f.name)
+						.join(", ")}`
+				);
+			}
+
+			// Filter out duplicates and add new files
+			const uniqueNewFiles = newFiles.filter(
+				(file) => !existingFileNames.includes(file.name)
+			);
+			setSelectedFiles((prev) => [...prev, ...uniqueNewFiles]);
+
+			// Clear the input
+			e.target.value = "";
+		}
+	};
+
+	const removeFile = (indexToRemove) => {
+		setSelectedFiles((prev) =>
+			prev.filter((_, index) => index !== indexToRemove)
+		);
+	};
 
 	const handleRequestSubmit = async (e) => {
 		e.preventDefault();
 		if (!selectedDocument || !purpose) return;
-		const datetime = new Date().toISOString().slice(0, 19).replace("T", " ");
 		try {
 			await addRequestDocument({
 				userId,
 				documentId: selectedDocument,
 				purpose,
-				datetime,
+				attachments: selectedFiles,
 			});
 			toast.success("Request submitted successfully!");
 			setShowRequestForm(false);
 			setSelectedDocument("");
 			setPurpose("");
+			setSelectedFiles([]);
+			// Reset file inputs
+			const fileInput = document.getElementById("file-upload");
+			const addMoreInput = document.getElementById("add-more-files");
+			if (fileInput) fileInput.value = "";
+			if (addMoreInput) addMoreInput.value = "";
+
 			// Refresh user requests after successful submission
 			if (userId) {
 				setLoadingRequests(true);
@@ -125,114 +243,141 @@ export default function StudentDashboard() {
 		}
 	};
 
-	React.useEffect(() => {
-		const handleResize = () => {
-			if (window.innerWidth < 768) {
-				setSidebarOpen(false);
-			} else {
-				setSidebarOpen(true);
-			}
-		};
-		window.addEventListener("resize", handleResize);
-		return () => window.removeEventListener("resize", handleResize);
-	}, []);
-
 	return (
-		<div className="flex h-screen bg-gray-50">
+		<div className="flex min-h-screen bg-gray-50">
 			<Toaster position="top-right" />
-			{/* Sidebar for desktop, overlay for mobile */}
-			{(sidebarOpen || sidebarMobile) && (
+			{/* Mobile Overlay */}
+			{sidebarOpen && (
 				<div
-					className={`${
-						sidebarMobile ? "fixed inset-0 z-40 bg-black/40" : ""} md:relative md:z-auto`}
-					onClick={() => setSidebarMobile(false)}
-				>
-					<aside
-						className={`flex flex-col h-full p-4 space-y-6 bg-slate-900 text-white transition-all duration-300 w-64 ${
-							sidebarMobile
-								? "fixed top-0 bottom-0 left-0 translate-x-0"
-								: "hidden md:flex"
-						}`}
-						onClick={(e) => e.stopPropagation()}
-					>
-						{/* Close button for mobile */}
-						{sidebarMobile && (
-							<button
-								className="absolute top-4 right-4 text-white"
-								onClick={() => setSidebarMobile(false)}
-							>
-								<XCircle className="w-7 h-7" />
-							</button>
-						)}
-						{/* Logo Centered */}
-						<div className="flex justify-center items-center mb-8 w-full transition-all">
-							<img
-								src="/images/mogchs.jpg"
-								alt="MOGCHS Logo"
-								className={`transition-all duration-300 rounded-full bg-white object-cover ${
-									sidebarOpen ? "h-20 w-22" : "w-12 h-12"
-								}`}
-							/>
-						</div>
-						{/* Nav */}
-						<nav className="flex flex-col gap-2">
-							{navItems.map((item, idx) => (
-								<a
-									href="#"
-									key={item.label}
-									className="flex gap-3 items-center px-3 py-2 rounded transition-colors hover:bg-slate-800"
-								>
-									{item.icon}
-									<span className="ml-2 opacity-100">{item.label}</span>
-								</a>
-							))}
-						</nav>
-						<div className="mt-auto">
-							<Button className="flex gap-2 items-center w-full bg-blue-600 hover:bg-blue-700">
-								<LogOut className="w-5 h-5" />
-								<span className="ml-2 opacity-100">Logout</span>
-							</Button>
-						</div>
-					</aside>
-				</div>
+					className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+					onClick={() => setSidebarOpen(false)}
+				/>
 			)}
-			{/* Hamburger for mobile */}
-			{!sidebarOpen && !sidebarMobile && (
+
+			{/* Sidebar */}
+			<aside
+				className={`fixed lg:relative z-30 flex flex-col p-4 space-y-6 bg-slate-900 text-white transition-all duration-300 h-full lg:h-auto ${
+					sidebarOpen
+						? "w-64 translate-x-0"
+						: "w-64 -translate-x-full lg:translate-x-0"
+				} ${sidebarOpen ? "lg:w-64" : "lg:w-20"}`}
+				style={{ backgroundColor: "#0f172a", color: "white" }}
+			>
+				{/* Toggle button */}
 				<button
-					className="fixed top-4 left-4 z-50 p-2 text-white rounded-full shadow-lg md:hidden bg-slate-900"
-					onClick={() => setSidebarMobile(true)}
+					className="flex justify-center items-center mb-4 w-10 h-10 text-white bg-blue-600 rounded hover:bg-blue-700 focus:outline-none"
+					style={{ color: "white" }}
+					onClick={() => setSidebarOpen((open) => !open)}
 				>
 					<Menu className="w-6 h-6" />
 				</button>
-			)}
+				{/* Logo Centered */}
+				<div className="flex justify-center items-center mb-8 w-full transition-all">
+					<img
+						src="/images/mogchs.jpg"
+						alt="MOGCHS Logo"
+						className={`transition-all duration-300 rounded-full bg-white object-cover ${
+							sidebarOpen ? "h-20 w-22" : "w-12 h-12"
+						}`}
+					/>
+				</div>
+				{/* Nav */}
+				<nav className="flex flex-col gap-2">
+					{navItems.map((item, idx) => (
+						<a
+							href="#"
+							key={item.label}
+							className="flex gap-3 items-center px-3 py-2 text-white rounded transition-colors hover:bg-slate-800"
+							style={{ color: "white" }}
+						>
+							{item.icon}
+							<span
+								className={`transition-all duration-200 origin-left ${
+									sidebarOpen
+										? "ml-2 opacity-100"
+										: "overflow-hidden ml-0 w-0 opacity-0"
+								}`}
+								style={{ color: "white" }}
+							>
+								{item.label}
+							</span>
+						</a>
+					))}
+				</nav>
+				<div className="mt-auto">
+					<button
+						className="flex gap-2 items-center px-4 py-2 w-full text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700"
+						style={{ backgroundColor: "#2563eb", color: "white" }}
+						onClick={logout}
+					>
+						<LogOut className="w-5 h-5" />
+						<span
+							className={`transition-all duration-200 origin-left ${
+								sidebarOpen
+									? "ml-2 opacity-100"
+									: "overflow-hidden ml-0 w-0 opacity-0"
+							}`}
+							style={{ color: "white" }}
+						>
+							Logout
+						</span>
+					</button>
+				</div>
+			</aside>
 			{/* Main Content */}
-			<main className="overflow-auto flex-1 p-2 pt-16 md:pt-8 md:p-8">
-				{/* Header */}
-				<header className="flex flex-col gap-4 mb-8 md:flex-row md:justify-between md:items-center md:gap-0">
+			<main className="flex-1 p-4 w-full min-w-0 lg:p-8">
+				{/* Mobile Menu Button */}
+				<div className="flex justify-between items-center mb-4 lg:hidden">
+					<button
+						onClick={() => setSidebarOpen(true)}
+						className="p-2 bg-white rounded-lg border shadow-sm text-slate-600 border-slate-200"
+					>
+						<Menu className="w-5 h-5" />
+					</button>
+					<h1 className="text-xl font-bold text-slate-900">Student Portal</h1>
+				</div>
+
+				{/* Desktop Header */}
+				<header className="hidden justify-between items-center mb-8 lg:flex">
 					<div>
-						<h1 className="text-2xl font-bold md:text-3xl text-slate-900">
+						<h1 className="text-3xl font-bold text-slate-900">
 							Student Portal
 						</h1>
-						<p className="text-sm text-slate-600 md:text-base">
+						<p className="text-base text-slate-600">
 							Request and track your documents
 						</p>
 					</div>
 					<Button
-						className="flex gap-2 items-center w-full bg-blue-600 hover:bg-blue-700 md:w-auto"
+						className="flex gap-2 items-center bg-blue-600 hover:bg-blue-700"
+						onClick={() => setShowRequestForm(true)}
+					>
+						<Plus className="w-4 h-4" /> Request Document
+					</Button>
+				</header>
+
+				{/* Mobile Header */}
+				<header className="flex flex-col gap-4 mb-6 lg:hidden">
+					<div>
+						<p className="text-sm text-slate-600">
+							Request and track your documents
+						</p>
+					</div>
+					<Button
+						className="flex gap-2 items-center w-full bg-blue-600 hover:bg-blue-700"
 						onClick={() => setShowRequestForm(true)}
 					>
 						<Plus className="w-4 h-4" /> Request Document
 					</Button>
 				</header>
 				{/* Stats Cards */}
-				<div className="grid grid-cols-1 gap-6 mb-8 md:grid-cols-3">
+				<div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-3 lg:gap-6 lg:mb-8">
 					<Card>
-						<CardContent className="p-6">
-							<div className="flex gap-2 items-center text-sm text-slate-500">
+						<CardContent className="p-4 lg:p-6">
+							<div className="flex gap-2 items-center text-xs lg:text-sm text-slate-500">
 								<Clock className="w-4 h-4" />
-								Pending Requests
+								<span className="truncate">Pending</span>
 							</div>
-							<div className="mt-2 text-2xl font-bold text-slate-900">
+							<div className="mt-2 text-xl font-bold lg:text-2xl text-slate-900">
 								{userRequests.filter((req) => req.status === "Pending").length}
 							</div>
 							<div className="mt-1 text-xs text-yellow-600">
@@ -241,12 +386,12 @@ export default function StudentDashboard() {
 						</CardContent>
 					</Card>
 					<Card>
-						<CardContent className="p-6">
-							<div className="flex gap-2 items-center text-sm text-slate-500">
+						<CardContent className="p-4 lg:p-6">
+							<div className="flex gap-2 items-center text-xs lg:text-sm text-slate-500">
 								<CheckCircle2 className="w-4 h-4" />
-								Approved
+								<span className="truncate">Approved</span>
 							</div>
-							<div className="mt-2 text-2xl font-bold text-slate-900">
+							<div className="mt-2 text-xl font-bold lg:text-2xl text-slate-900">
 								{userRequests.filter((req) => req.status === "Approved").length}
 							</div>
 							<div className="mt-1 text-xs text-green-600">
@@ -255,12 +400,12 @@ export default function StudentDashboard() {
 						</CardContent>
 					</Card>
 					<Card>
-						<CardContent className="p-6">
-							<div className="flex gap-2 items-center text-sm text-slate-500">
+						<CardContent className="p-4 lg:p-6">
+							<div className="flex gap-2 items-center text-xs lg:text-sm text-slate-500">
 								<FileText className="w-4 h-4" />
-								Total Requests
+								<span className="truncate">Total</span>
 							</div>
-							<div className="mt-2 text-2xl font-bold text-slate-900">
+							<div className="mt-2 text-xl font-bold lg:text-2xl text-slate-900">
 								{userRequests.length}
 							</div>
 							<div className="mt-1 text-xs text-slate-600">All time</div>
@@ -342,17 +487,91 @@ export default function StudentDashboard() {
 										required
 									/>
 								</div>
+								<div>
+									<Label
+										htmlFor="file-upload"
+										className="block mb-1 text-sm font-medium text-slate-700"
+									>
+										Document Attachments (Optional)
+									</Label>
+									<Input
+										type="file"
+										id="file-upload"
+										accept=".jpg, .jpeg, .png, .gif, .pdf"
+										onChange={handleFileChange}
+										className="block w-full text-sm rounded-lg border cursor-pointer text-slate-900 border-slate-300 bg-slate-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+										multiple
+									/>
+									<p className="mt-1 text-xs text-slate-500">
+										You can select multiple files (JPG, PNG, GIF, PDF). Max 5MB
+										per file.
+									</p>
+
+									{/* Hidden input for adding more files */}
+									<input
+										type="file"
+										id="add-more-files"
+										accept=".jpg, .jpeg, .png, .gif, .pdf"
+										onChange={handleAddMoreFiles}
+										className="hidden"
+										multiple
+									/>
+
+									{selectedFiles.length > 0 && (
+										<div className="mt-3">
+											<div className="flex justify-between items-center mb-2">
+												<p className="text-xs font-medium text-slate-600">
+													Selected files ({selectedFiles.length}):
+												</p>
+												<button
+													type="button"
+													onClick={() =>
+														document.getElementById("add-more-files").click()
+													}
+													className="text-xs font-medium text-blue-600 hover:text-blue-800"
+												>
+													+ Add More Files
+												</button>
+											</div>
+											<div className="overflow-y-auto p-2 max-h-32 rounded-lg border border-slate-200 bg-slate-50">
+												{selectedFiles.map((file, index) => (
+													<div
+														key={index}
+														className="flex justify-between items-center px-2 py-1 rounded hover:bg-slate-100"
+													>
+														<div className="flex-1 min-w-0">
+															<p className="text-xs font-medium truncate text-slate-700">
+																{file.name}
+															</p>
+															<p className="text-xs text-slate-500">
+																{(file.size / 1024 / 1024).toFixed(2)} MB
+															</p>
+														</div>
+														<button
+															type="button"
+															onClick={() => removeFile(index)}
+															className="ml-2 text-xs text-red-500 hover:text-red-700"
+															title="Remove file"
+														>
+															✕
+														</button>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
+								</div>
 								<div className="flex gap-3 pt-2">
 									<Button
 										type="submit"
-										className="flex-1 h-11 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-md hover:from-blue-700 hover:to-indigo-700"
+										className="flex-1 h-11 text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-md hover:from-blue-700 hover:to-indigo-700"
 									>
 										Submit Request
 									</Button>
 									<Button
 										type="button"
 										variant="outline"
-										className="flex-1 h-11 text-base font-semibold bg-gradient-to-r from-red-600 to-red-600 rounded-lg shadow-md border-slate-300 hover:from-red-700 hover:to-indigo-700"
+										className="flex-1 h-11 text-base font-semibold text-white bg-gradient-to-r from-red-600 to-red-600 rounded-lg shadow-md border-slate-300 hover:from-red-700 hover:to-red-700"
 										onClick={() => setShowRequestForm(false)}
 									>
 										Cancel
@@ -364,56 +583,77 @@ export default function StudentDashboard() {
 				)}
 				{/* My Requests Table */}
 				<Card>
-					<CardContent className="p-2 md:p-6">
-						<div className="mb-4 text-lg font-semibold text-slate-900">
+					<CardContent className="p-4 lg:p-6">
+						<div className="mb-4 text-lg font-semibold lg:text-xl text-slate-900">
 							My Document Requests
 						</div>
 						{loadingRequests ? (
-							<div className="py-8 text-center">
-								<p className="text-slate-500">Loading your requests...</p>
+							<div className="py-6 text-center lg:py-8">
+								<p className="text-sm text-slate-500 lg:text-base">
+									Loading your requests...
+								</p>
 							</div>
 						) : userRequests.length === 0 ? (
-							<div className="py-8 text-center">
-								<p className="text-slate-500">No document requests yet.</p>
+							<div className="py-6 text-center lg:py-8">
+								<p className="text-sm text-slate-500 lg:text-base">
+									No document requests yet.
+								</p>
 							</div>
 						) : (
-							<div className="overflow-x-auto">
-								<table className="min-w-full text-xs md:text-sm text-slate-700">
+							<div className="overflow-x-auto -mx-4 lg:mx-0">
+								<table className="min-w-full text-xs lg:text-sm text-slate-700">
 									<thead>
 										<tr className="border-b border-slate-200">
-											<th className="px-2 py-2 font-semibold text-left md:px-4">
+											<th className="px-3 py-2 font-semibold text-left lg:px-4">
 												Document
 											</th>
-											<th className="px-2 py-2 font-semibold text-left md:px-4">
-												Date Requested
+											<th className="hidden px-3 py-2 font-semibold text-left lg:px-4 sm:table-cell">
+												Date
 											</th>
-											<th className="px-2 py-2 font-semibold text-left md:px-4">
+											<th className="px-3 py-2 font-semibold text-left lg:px-4">
 												Status
 											</th>
 										</tr>
 									</thead>
 									<tbody>
 										{userRequests.map((req) => (
-											<tr key={req.id} className="border-b border-slate-100">
-												<td className="px-4 py-2">{req.document}</td>
-												<td className="px-4 py-2">{req.dateRequested}</td>
-												<td className="px-4 py-2">
+											<tr
+												key={req.id}
+												className="border-b border-slate-100 hover:bg-slate-50"
+											>
+												<td className="px-3 py-3 lg:px-4 lg:py-2">
+													<div className="font-medium">{req.document}</div>
+													<div className="text-xs text-slate-500 sm:hidden">
+														{req.dateRequested}
+													</div>
+												</td>
+												<td className="hidden px-3 py-3 lg:px-4 lg:py-2 sm:table-cell">
+													{req.dateRequested}
+												</td>
+												<td className="px-3 py-3 lg:px-4 lg:py-2">
 													{req.status === "Pending" && (
-														<span className="flex gap-1 items-center font-medium text-yellow-600">
-															<Clock className="w-4 h-4" />
+														<span className="inline-flex px-2 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full">
 															Pending
 														</span>
 													)}
-													{req.status === "Approved" && (
-														<span className="flex gap-1 items-center font-medium text-green-600">
-															<CheckCircle2 className="w-4 h-4" />
-															Approved
+													{req.status === "Processed" && (
+														<span className="inline-flex px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full">
+															Processed
 														</span>
 													)}
-													{req.status === "Processing" && (
-														<span className="flex gap-1 items-center font-medium text-blue-600">
-															<FileText className="w-4 h-4" />
-															Processing
+													{req.status === "Signatory" && (
+														<span className="inline-flex px-2 py-1 text-xs font-medium text-blue-800 bg-blue-100 rounded-full">
+															Signatory
+														</span>
+													)}
+													{req.status === "Release" && (
+														<span className="inline-flex px-2 py-1 text-xs font-medium text-orange-800 bg-orange-100 rounded-full">
+															Release
+														</span>
+													)}
+													{req.status === "Released" && (
+														<span className="inline-flex px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full">
+															Released
 														</span>
 													)}
 												</td>

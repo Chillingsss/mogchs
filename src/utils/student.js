@@ -22,14 +22,18 @@ export async function addRequestDocument({
 	userId,
 	documentId,
 	purpose,
-	datetime,
+	attachments = [],
 }) {
 	const formData = new FormData();
 	formData.append("operation", "addRequestDocument");
-	formData.append(
-		"json",
-		JSON.stringify({ userId, documentId, purpose, datetime })
-	);
+	formData.append("json", JSON.stringify({ userId, documentId, purpose }));
+
+	// Add multiple file attachments if provided
+	if (attachments && attachments.length > 0) {
+		attachments.forEach((file, index) => {
+			formData.append(`attachments[${index}]`, file);
+		});
+	}
 
 	try {
 		const response = await axios.post(

@@ -26,6 +26,10 @@ class User {
     try {
       $conn->beginTransaction();
 
+      // Set Philippine timezone and get current datetime
+      date_default_timezone_set('Asia/Manila');
+      $philippineDateTime = date('Y-m-d h:i:s A');
+
       // First, get the status ID for "Pending" status
       $statusSql = "SELECT id FROM tblstatus WHERE name = 'Pending' LIMIT 1";
       $statusStmt = $conn->prepare($statusSql);
@@ -45,21 +49,121 @@ class User {
       $stmt->bindParam(':userId', $json['userId']);
       $stmt->bindParam(':documentId', $json['documentId']);
       $stmt->bindParam(':purpose', $json['purpose']);
-      $stmt->bindParam(':datetime', $json['datetime']);
+      $stmt->bindParam(':datetime', $philippineDateTime);
 
       if ($stmt->execute()) {
         $requestId = $conn->lastInsertId();
+        
+        // Handle file upload if attachment exists
+        if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+          $uploadDir = 'requirements/';
+          
+          // Create directory if it doesn't exist
+          if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+          }
+
+          // Keep original filename
+          $originalFileName = $_FILES['attachment']['name'];
+          $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
+          $filePath = $uploadDir . $originalFileName;
+
+          // Validate file type (only images)
+          $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+          if (!in_array(strtolower($fileExtension), $allowedTypes)) {
+            throw new PDOException("Invalid file type. Only JPG, PNG, GIF, and PDF files are allowed.");
+          }
+
+          // Check file size (max 5MB)
+          if ($_FILES['attachment']['size'] > 5 * 1024 * 1024) {
+            throw new PDOException("File size too large. Maximum size is 5MB.");
+          }
+
+          if (move_uploaded_file($_FILES['attachment']['tmp_name'], $filePath)) {
+            // Insert into tblrequirements - store only filename without path
+            $reqSql = "INSERT INTO tblrequirements (requestId, filepath, createdAt) VALUES (:requestId, :filepath, :datetime)";
+            $reqStmt = $conn->prepare($reqSql);
+            $reqStmt->bindParam(':requestId', $requestId);
+            $reqStmt->bindParam(':filepath', $originalFileName); // Store only filename
+            $reqStmt->bindParam(':datetime', $philippineDateTime);
+            
+            if (!$reqStmt->execute()) {
+              throw new PDOException("Failed to save file information to database");
+            }
+          } else {
+            throw new PDOException("Failed to upload file");
+          }
+        }
+
+        // Handle multiple file uploads if attachments exist
+        if (isset($_FILES['attachments'])) {
+          $uploadDir = 'requirements/';
+          
+          // Create directory if it doesn't exist
+          if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+          }
+
+          $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+          $uploadedFiles = 0;
+
+          // Handle multiple files
+          $fileCount = count($_FILES['attachments']['name']);
+          
+          for ($i = 0; $i < $fileCount; $i++) {
+            // Skip if no file or error
+            if ($_FILES['attachments']['error'][$i] !== UPLOAD_ERR_OK) {
+              continue;
+            }
+
+            $originalFileName = $_FILES['attachments']['name'][$i];
+            $fileTmpName = $_FILES['attachments']['tmp_name'][$i];
+            $fileSize = $_FILES['attachments']['size'][$i];
+            
+            $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
+            
+            // Validate file type
+            if (!in_array(strtolower($fileExtension), $allowedTypes)) {
+              throw new PDOException("Invalid file type for '$originalFileName'. Only JPG, PNG, GIF, and PDF files are allowed.");
+            }
+
+            // Check file size (max 5MB per file)
+            if ($fileSize > 5 * 1024 * 1024) {
+              throw new PDOException("File size too large for '$originalFileName'. Maximum size is 5MB per file.");
+            }
+
+            // Keep original filename
+            $filePath = $uploadDir . $originalFileName;
+
+            if (move_uploaded_file($fileTmpName, $filePath)) {
+              // Insert into tblrequirements - store only filename without path
+              $reqSql = "INSERT INTO tblrequirements (requestId, filepath, createdAt) VALUES (:requestId, :filepath, :datetime)";
+              $reqStmt = $conn->prepare($reqSql);
+              $reqStmt->bindParam(':requestId', $requestId);
+              $reqStmt->bindParam(':filepath', $originalFileName); // Store only filename
+              $reqStmt->bindParam(':datetime', $philippineDateTime);
+              
+              if ($reqStmt->execute()) {
+                $uploadedFiles++;
+              } else {
+                throw new PDOException("Failed to save file information for '$originalFileName' to database");
+              }
+            } else {
+              throw new PDOException("Failed to upload file '$originalFileName'");
+            }
+          }
+        }
         
         // Insert into tblrequeststatus with the correct pending status ID
         $statusSql = "INSERT INTO tblrequeststatus (requestId, statusId, createdAt) VALUES (:requestId, :statusId, :datetime)";
         $statusStmt = $conn->prepare($statusSql);
         $statusStmt->bindParam(':requestId', $requestId);
         $statusStmt->bindParam(':statusId', $pendingStatusId);
-        $statusStmt->bindParam(':datetime', $json['datetime']);
+        $statusStmt->bindParam(':datetime', $philippineDateTime);
 
         if ($statusStmt->execute()) {
           $conn->commit();
-          return json_encode(['success' => true]);
+          return json_encode(['success' => true, 'requestId' => $requestId]);
         }
       }
 

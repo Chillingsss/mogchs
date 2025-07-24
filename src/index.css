@@ -135,10 +135,25 @@
 }
 
 @layer base {
-	* {
-		@apply border-border outline-ring/50;
-	}
 	body {
-		@apply bg-background text-foreground;
+		background-color: #ffffff;
+		color: #213547;
+	}
+}
+
+@layer components {
+	.card {
+		background-color: white;
+		border: 1px solid rgba(255, 255, 255, 0.8);
+		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+			0 2px 4px -1px rgba(0, 0, 0, 0.06);
+		border-radius: 0.5rem;
+	}
+
+	.dark .card {
+		background-color: #1e293b;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3),
+			0 2px 4px -1px rgba(0, 0, 0, 0.2);
 	}
 }
