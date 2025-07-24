@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
-import { loginUser } from "@/utils/security";
 import CryptoJS from "crypto-js";
 import Cookies from "js-cookie";
+import { loginUser } from "@/utils/security";
 
 const COOKIE_KEY = "mogchs_user";
 const SECRET_KEY = "mogchs_secret_key"; // You can use a more secure key in production
@@ -28,10 +28,12 @@ export default function LoginPage() {
 			try {
 				const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
 				const decrypted = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-				if (decrypted && decrypted.user_userLevel === "Admin") {
+				if (decrypted && decrypted.userLevel === "Admin") {
 					navigate("/AdminDashboard");
-				} else if (decrypted && decrypted.user_userLevel === "Registrar") {
+				} else if (decrypted && decrypted.userLevel === "Registrar") {
 					navigate("/RegistrarDashboard");
+				} else if (decrypted && decrypted.userLevel === "Student") {
+					navigate("/StudentDashboard");
 				}
 			} catch (e) {
 				// Invalid cookie, ignore
@@ -42,24 +44,34 @@ export default function LoginPage() {
 	const handleSubmit = async (event) => {
 		event.preventDefault();
 		setIsLoading(true);
+		console.log("user");
+
 		try {
 			const user = await loginUser(username, password);
-			if (user && user.user_userLevel === "Admin") {
+			console.log("user", user);
+			if (user && user.userLevel === "Admin") {
 				const encrypted = CryptoJS.AES.encrypt(
 					JSON.stringify(user),
 					SECRET_KEY
 				).toString();
 				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
 				navigate("/AdminDashboard");
-			} else if (user && user.user_userLevel === "Registrar") {
+			} else if (user && user.userLevel === "Registrar") {
 				const encrypted = CryptoJS.AES.encrypt(
 					JSON.stringify(user),
 					SECRET_KEY
 				).toString();
 				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
 				navigate("/RegistrarDashboard");
+			} else if (user && user.userLevel === "Student") {
+				const encrypted = CryptoJS.AES.encrypt(
+					JSON.stringify(user),
+					SECRET_KEY
+				).toString();
+				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
+				navigate("/StudentDashboard");
 			} else {
-				alert("Not an admin or invalid credentials");
+				alert("Invalid credentials or unauthorized access");
 			}
 		} catch (err) {
 			alert("Login failed");

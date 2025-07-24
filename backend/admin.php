@@ -9,44 +9,44 @@ class User {
     $json = json_decode($json, true);
 
     // Check in tbluser
-    $sql = "SELECT a.user_id, a.user_firstname, a.user_lastname, a.user_email, a.user_password, b.userL_name AS user_userLevel FROM tbluser a
-            INNER JOIN tbluserlevel b ON a.user_userLevel = b.userL_id
-            WHERE BINARY user_id = :username";
+    $sql = "SELECT a.id, a.firstname, a.lastname, a.email, a.password, b.name AS userLevel FROM tbluser a
+            INNER JOIN tbluserlevel b ON a.userLevel = b.id
+            WHERE BINARY a.id = :username";
     $stmt = $conn->prepare($sql);
     $stmt->bindParam(':username', $json['username']);
     $stmt->execute();
 
     if ($stmt->rowCount() > 0) {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (password_verify($json['password'], $user['user_password'])) {
+        if (password_verify($json['password'], $user['password'])) {
             return json_encode([
-                'user_id' => $user['user_id'],
-                'user_userLevel' => $user['user_userLevel'],
-                'user_firstname' => $user['user_firstname'],
-                'user_lastname' => $user['user_lastname'],
-                'user_email' => $user['user_email']
+                'id' => $user['id'],
+                'userLevel' => $user['userLevel'],
+                'firstname' => $user['firstname'],
+                'lastname' => $user['lastname'],
+                'email' => $user['email']
             ]);
         }
     }
 
 
     // Check in tblstudent
-    $sql = "SELECT a.student_id	, a.student_firstname	, a.student_lastname, a.student_password, b.userL_level AS student_userLevel FROM tblstudent a
-            INNER JOIN tbluserlevel b ON a.student_userLevel = b.userL_id
-            WHERE BINARY a.student_id = :username";
+    $sql = "SELECT a.id, a.firstname, a.lastname, a.email, a.password, b.name AS userLevel FROM tblstudent a
+            INNER JOIN tbluserlevel b ON a.userLevel = b.id
+            WHERE BINARY a.id = :username";
     $stmt = $conn->prepare($sql);
     $stmt->bindParam(':username', $json['username']);
     $stmt->execute();
 
     if ($stmt->rowCount() > 0) {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (password_verify($json['password'], $user['student_password'])) {
+        if (password_verify($json['password'], $user['password'])) {
             return json_encode([
-                'student_id' => $user['student_id'],
-                'student_firstname' => $user['student_firstname'],
-                'student_lastname' => $user['student_lastname'],
-                'student_email' => $user['student_email'],
-                'student_userLevel' => $user['student_userLevel']
+                'id' => $user['id'],
+                'firstname' => $user['firstname'],
+                'lastname' => $user['lastname'],
+                'email' => $user['email'],
+                'userLevel' => $user['userLevel']
             ]);
         }
     }

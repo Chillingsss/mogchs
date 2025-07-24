@@ -4,6 +4,7 @@ export async function loginUser(username, password) {
 	const formData = new FormData();
 	formData.append("operation", "login");
 	formData.append("json", JSON.stringify({ username: username, password }));
+	console.log("username and password", username, password);
 
 	try {
 		const response = await axios.post(

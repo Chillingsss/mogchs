@@ -14,7 +14,7 @@ export default function PrivateRoute({ children, allowedRole }) {
 	try {
 		const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
 		const user = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-		if (!user || user.user_userLevel !== allowedRole) {
+		if (!user || user.userLevel !== allowedRole) {
 			return <Navigate to="/" replace />;
 		}
 		return children;
