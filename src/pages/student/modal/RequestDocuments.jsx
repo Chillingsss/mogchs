@@ -364,6 +364,11 @@ export default function RequestDocuments({
 		return type ? type.id : "";
 	};
 
+	const isCertificateOfEnrollment = () => {
+		const selectedDocName = getSelectedDocumentName().toLowerCase();
+		return selectedDocName.includes("certificate of enrollment");
+	};
+
 	return (
 		<div className="flex fixed inset-0 z-50 justify-center items-center backdrop-blur-sm bg-black/40">
 			<div className="relative mx-2 w-full max-w-xs bg-white rounded-2xl border shadow-2xl md:max-w-md border-slate-200">
@@ -436,34 +441,22 @@ export default function RequestDocuments({
 						/>
 					</div>
 					<div>
-						<Label
-							htmlFor="file-upload"
-							className="block mb-1 text-sm font-medium text-slate-700"
-						>
-							Document Attachments
-							{!isSF10Document() &&
-								(requiresAttachments() ? (
-									<span className="text-red-500">*</span>
-								) : (
-									" (Optional)"
-								))}
-						</Label>
-
-						{/* SF10: Show only the note */}
-						{isSF10Document() && (
-							<div className="p-3 mb-3 bg-green-50 rounded-lg border border-green-200">
-								<p className="text-sm text-green-800">
-									<strong>Note:</strong> For SF10 requests,{" "}
-									<b>no document attachments are required or allowed</b>.<br />
-									Please bring a <strong>Request Letter</strong> to the office
-									when you collect your document.
-								</p>
-							</div>
-						)}
-
-						{/* Only show file input and file management for non-SF10 */}
-						{!isSF10Document() && (
-							<>
+						{/* Only show Document Attachments section if not SF10 or Certificate of Enrollment */}
+						{!isCertificateOfEnrollment() && !isSF10Document() && (
+							<div>
+								<Label
+									htmlFor="file-upload"
+									className="block mb-1 text-sm font-medium text-slate-700"
+								>
+									Document Attachments
+									{!isSF10Document() &&
+										(requiresAttachments() ? (
+											<span className="text-red-500">*</span>
+										) : (
+											" (Optional)"
+										))}
+								</Label>
+								{/* Only show file input and file management for non-SF10 */}
 								<Input
 									type="file"
 									id="file-upload"
@@ -476,7 +469,6 @@ export default function RequestDocuments({
 									You can select multiple files (JPG, PNG, GIF, PDF). Max 5MB
 									per file.
 								</p>
-
 								{/* Show message when no files selected for required documents */}
 								{requiresAttachments() && selectedFiles.length === 0 && (
 									<div className="p-2 mt-2 bg-red-50 rounded border border-red-200">
@@ -507,14 +499,15 @@ export default function RequestDocuments({
 										</p>
 									</div>
 								)}
-							</>
+							</div>
 						)}
 
-						{/* Show message for SF10 that no attachments are needed */}
+						{/* SF10: Only show the request letter note, no label or other notes */}
 						{isSF10Document() && (
-							<div className="p-2 mt-2 bg-gray-50 rounded border border-gray-200">
-								<p className="text-xs text-gray-600">
-									ℹ️ No document attachments required for SF10 requests.
+							<div className="p-3 mb-3 bg-green-50 rounded-lg border border-green-200">
+								<p className="text-sm text-green-800">
+									Please bring a <strong>Request Letter</strong> to the office
+									when you collect your document.
 								</p>
 							</div>
 						)}
