@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@radix-ui/react-label";
 import {
 	getDocuments,
-	addRequestDocument,
 	getRequirementsType,
+	addRequestDocument,
+	addCombinedRequestDocument,
 } from "@/utils/student";
 import toast from "react-hot-toast";
 
@@ -22,6 +23,7 @@ export default function RequestDocuments({
 	const [selectedFiles, setSelectedFiles] = useState([]);
 	const [requestTypes, setRequestTypes] = useState([]);
 	const [loadingRequestTypes, setLoadingRequestTypes] = useState(false);
+	const [requestBothDocuments, setRequestBothDocuments] = useState(false);
 
 	// Fetch documents and request types when modal opens
 	React.useEffect(() => {
@@ -123,7 +125,15 @@ export default function RequestDocuments({
 			return false;
 		}
 
-		// For Diploma and CAV, require attachments
+		// Special case: CAV with combined request doesn't need attachments
+		const isCavDocument = getSelectedDocumentName()
+			.toLowerCase()
+			.includes("cav");
+		if (isCavDocument && requestBothDocuments) {
+			return false; // No attachment validation needed for combined requests
+		}
+
+		// For Diploma and CAV (without combined request), require attachments
 		if (requiresAttachments() && selectedFiles.length === 0) return true;
 
 		// If files are selected, require all files to have a requirement type
@@ -265,7 +275,13 @@ export default function RequestDocuments({
 				return;
 			}
 
-			if (requiresAttachments() && selectedFiles.length === 0) {
+			// Special handling for CAV combined requests
+			const isCavDocument = getSelectedDocumentName()
+				.toLowerCase()
+				.includes("cav");
+			if (isCavDocument && requestBothDocuments) {
+				// No attachment validation needed for combined requests
+			} else if (requiresAttachments() && selectedFiles.length === 0) {
 				toast.error("This document type requires file attachments");
 				return;
 			}
@@ -294,19 +310,48 @@ export default function RequestDocuments({
 				return;
 			}
 
-			await addRequestDocument({
-				userId,
-				documentId: selectedDocument,
-				purpose,
-				attachments: attachments,
-				typeIds: typeIds, // Send array of typeIds
-			});
-			toast.success("Request submitted successfully!");
+			// Check if this is a combined CAV + Diploma request
+			const isCavDocument = getSelectedDocumentName()
+				.toLowerCase()
+				.includes("cav");
+			if (isCavDocument && requestBothDocuments) {
+				// Find Diploma document ID
+				const diplomaDocument = documents.find((doc) =>
+					doc.name.toLowerCase().includes("diploma")
+				);
+
+				if (!diplomaDocument) {
+					toast.error("Diploma document type not found");
+					return;
+				}
+
+				await addCombinedRequestDocument({
+					userId,
+					primaryDocumentId: selectedDocument, // CAV
+					secondaryDocumentId: diplomaDocument.id, // Diploma
+					purpose,
+					attachments: attachments,
+					typeIds: typeIds,
+				});
+				toast.success(
+					"Combined request for Diploma and CAV submitted successfully!"
+				);
+			} else {
+				await addRequestDocument({
+					userId,
+					documentId: selectedDocument,
+					purpose,
+					attachments: attachments,
+					typeIds: typeIds, // Send array of typeIds
+				});
+				toast.success("Request submitted successfully!");
+			}
 
 			// Reset form
 			setSelectedDocument("");
 			setPurpose("");
 			setSelectedFiles([]);
+			setRequestBothDocuments(false);
 			// Reset file inputs
 			const fileInput = document.getElementById("file-upload");
 			const addMoreInput = document.getElementById("add-more-files");
@@ -326,6 +371,7 @@ export default function RequestDocuments({
 		setSelectedDocument("");
 		setPurpose("");
 		setSelectedFiles([]);
+		setRequestBothDocuments(false);
 		// Reset file inputs
 		const fileInput = document.getElementById("file-upload");
 		const addMoreInput = document.getElementById("add-more-files");
@@ -487,16 +533,38 @@ export default function RequestDocuments({
 													: "the required document"}
 											</b>
 											.
-											{getSelectedDocumentName()
-												.toLowerCase()
-												.includes("cav") && (
-												<span>
-													{" "}
-													If you don't have a Diploma, you need to request a
-													Diploma first before requesting a CAV document.
-												</span>
-											)}
 										</p>
+									</div>
+								)}
+
+								{/* CAV Combined Request Option */}
+								{getSelectedDocumentName().toLowerCase().includes("cav") && (
+									<div className="p-3 mt-2 bg-blue-50 rounded border border-blue-200">
+										<div className="flex items-start space-x-2">
+											<input
+												type="checkbox"
+												id="requestBothDocuments"
+												checked={requestBothDocuments}
+												onChange={(e) =>
+													setRequestBothDocuments(e.target.checked)
+												}
+												className="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+											/>
+											<div className="flex-1">
+												<label
+													htmlFor="requestBothDocuments"
+													className="text-sm font-medium text-blue-800 cursor-pointer"
+												>
+													Request both Diploma and CAV together
+												</label>
+												<p className="mt-1 text-xs text-blue-600">
+													If you don't have a Diploma yet, check this option to
+													request both documents in a single request. The
+													Diploma will be processed first, then the CAV will be
+													processed once the Diploma is ready.
+												</p>
+											</div>
+										</div>
 									</div>
 								)}
 							</div>

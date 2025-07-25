@@ -192,6 +192,155 @@ class User {
     }
   }
 
+  function addCombinedRequestDocument($json)
+  {
+    include "connection.php";
+
+    $json = json_decode($json, true);
+
+    try {
+      $conn->beginTransaction();
+
+      // Set Philippine timezone and get current datetime
+      date_default_timezone_set('Asia/Manila');
+      $philippineDateTime = date('Y-m-d h:i:s A');
+
+      // First, get the status ID for "Pending" status
+      $statusSql = "SELECT id FROM tblstatus WHERE name = 'Pending' LIMIT 1";
+      $statusStmt = $conn->prepare($statusSql);
+      $statusStmt->execute();
+      $statusResult = $statusStmt->fetch(PDO::FETCH_ASSOC);
+
+      if (!$statusResult) {
+        throw new PDOException("Pending status not found in status request table");
+      }
+
+      $pendingStatusId = $statusResult['id'];
+
+      // First, create request for the secondary document (e.g., Diploma)
+      $sql = "INSERT INTO tblrequest (studentId, documentId, purpose, createdAt) 
+              VALUES (:userId, :documentId, :purpose, :datetime)";
+
+      $stmt = $conn->prepare($sql);
+      $stmt->bindParam(':userId', $json['userId']);
+      $stmt->bindParam(':documentId', $json['secondaryDocumentId']);
+      $stmt->bindParam(':purpose', $json['purpose']);
+      $stmt->bindParam(':datetime', $philippineDateTime);
+
+      if ($stmt->execute()) {
+        $secondaryRequestId = $conn->lastInsertId();
+        
+        // Insert status for secondary request
+        $statusSql = "INSERT INTO tblrequeststatus (requestId, statusId, createdAt) VALUES (:requestId, :statusId, :datetime)";
+        $statusStmt = $conn->prepare($statusSql);
+        $statusStmt->bindParam(':requestId', $secondaryRequestId);
+        $statusStmt->bindParam(':statusId', $pendingStatusId);
+        $statusStmt->bindParam(':datetime', $philippineDateTime);
+        $statusStmt->execute();
+
+        // Now create request for the primary document (e.g., CAV)
+        $stmt2 = $conn->prepare($sql);
+        $stmt2->bindParam(':userId', $json['userId']);
+        $stmt2->bindParam(':documentId', $json['primaryDocumentId']);
+        $stmt2->bindParam(':purpose', $json['purpose']);
+        $stmt2->bindParam(':datetime', $philippineDateTime);
+
+        if ($stmt2->execute()) {
+          $primaryRequestId = $conn->lastInsertId();
+          
+          // Handle file upload if attachments exist
+          if (isset($_FILES['attachments'])) {
+            $uploadDir = 'requirements/';
+            
+            // Create directory if it doesn't exist
+            if (!file_exists($uploadDir)) {
+              mkdir($uploadDir, 0777, true);
+            }
+
+            $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+            $uploadedFiles = 0;
+
+            // Handle multiple files
+            $fileCount = count($_FILES['attachments']['name']);
+            
+            for ($i = 0; $i < $fileCount; $i++) {
+              // Skip if no file or error
+              if ($_FILES['attachments']['error'][$i] !== UPLOAD_ERR_OK) {
+                continue;
+              }
+
+              $originalFileName = $_FILES['attachments']['name'][$i];
+              $fileTmpName = $_FILES['attachments']['tmp_name'][$i];
+              $fileSize = $_FILES['attachments']['size'][$i];
+              
+              $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
+              
+              // Validate file type
+              if (!in_array(strtolower($fileExtension), $allowedTypes)) {
+                throw new PDOException("Invalid file type for '$originalFileName'. Only JPG, PNG, GIF, and PDF files are allowed.");
+              }
+
+              // Check file size (max 5MB per file)
+              if ($fileSize > 5 * 1024 * 1024) {
+                throw new PDOException("File size too large for '$originalFileName'. Maximum size is 5MB per file.");
+              }
+
+              // Keep original filename
+              $filePath = $uploadDir . $originalFileName;
+
+              if (move_uploaded_file($fileTmpName, $filePath)) {
+                // Get the corresponding typeId for this file
+                $currentTypeId = isset($json['typeIds'][$i]) ? $json['typeIds'][$i] : null;
+                
+                if (!$currentTypeId) {
+                  throw new PDOException("Missing requirement type for file '$originalFileName'");
+                }
+
+                // Insert into tblrequirements for the primary request (CAV)
+                $reqSql = "INSERT INTO tblrequirements (requestId, filepath, typeId, createdAt) VALUES (:requestId, :filepath, :typeId, :datetime)";
+                $reqStmt = $conn->prepare($reqSql);
+                $reqStmt->bindParam(':requestId', $primaryRequestId);
+                $reqStmt->bindParam(':filepath', $originalFileName);
+                $reqStmt->bindParam(':typeId', $currentTypeId);
+                $reqStmt->bindParam(':datetime', $philippineDateTime);
+                
+                if ($reqStmt->execute()) {
+                  $uploadedFiles++;
+                } else {
+                  throw new PDOException("Failed to save file information for '$originalFileName' to database");
+                }
+              } else {
+                throw new PDOException("Failed to upload file '$originalFileName'");
+              }
+            }
+          }
+          
+          // Insert status for primary request
+          $statusStmt2 = $conn->prepare($statusSql);
+          $statusStmt2->bindParam(':requestId', $primaryRequestId);
+          $statusStmt2->bindParam(':statusId', $pendingStatusId);
+          $statusStmt2->bindParam(':datetime', $philippineDateTime);
+
+          if ($statusStmt2->execute()) {
+            $conn->commit();
+            return json_encode([
+              'success' => true, 
+              'primaryRequestId' => $primaryRequestId,
+              'secondaryRequestId' => $secondaryRequestId
+            ]);
+          }
+        }
+      }
+
+      $conn->rollBack();
+      return json_encode(['error' => 'Failed to add combined request: ' . implode(" ", $stmt->errorInfo())]);
+
+    } catch (PDOException $e) {
+      $conn->rollBack();
+      return json_encode(['error' => 'Database error occurred: ' . $e->getMessage()]);
+    }
+  }
+
   function getUserRequests($json)
   {
     include "connection.php";
@@ -265,6 +414,9 @@ switch ($operation) {
     break;
   case "addRequestDocument":
     echo $user->addRequestDocument($json);
+    break;
+  case "addCombinedRequestDocument":
+    echo $user->addCombinedRequestDocument($json);
     break;
   case "getUserRequests":
     echo $user->getUserRequests($json);

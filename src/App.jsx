@@ -12,7 +12,6 @@ function App() {
 	useEffect(() => {
 		initializeApiUrl();
 	}, []);
-
 	return (
 		<Routes>
 			<Route path="/" element={<LoginPage />} />

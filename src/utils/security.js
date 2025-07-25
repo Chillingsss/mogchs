@@ -9,9 +9,6 @@ export async function loginUser(username, password) {
 
 	// Get the encrypted API URL from session storage
 	const apiUrl = getDecryptedApiUrl();
-	if (!apiUrl) {
-		throw new Error("API URL not found or could not be decrypted");
-	}
 
 	try {
 		const response = await axios.post(`${apiUrl}/admin.php`, formData, {
