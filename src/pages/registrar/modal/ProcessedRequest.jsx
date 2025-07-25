@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { X, FileText, User, Calendar, MessageSquare } from "lucide-react";
 import {
-	X,
-	FileText,
-	User,
-	Calendar,
-	MessageSquare,
-	Paperclip,
-	ZoomIn,
-	ZoomOut,
-	RotateCcw,
-} from "lucide-react";
-import { processRequest, getRequestAttachments } from "@/utils/registrar";
+	processRequest,
+	getRequestAttachments,
+	getStudentDocuments,
+} from "@/utils/registrar";
 import toast from "react-hot-toast";
+import StudentDocumentsSection from "./components/StudentDocumentsSection";
+import AttachmentsSection from "./components/AttachmentsSection";
+import ImageZoomModal from "./components/ImageZoomModal";
 
 export default function ProcessedRequest({
 	request,
@@ -22,6 +19,7 @@ export default function ProcessedRequest({
 }) {
 	const [processing, setProcessing] = useState(false);
 	const [attachments, setAttachments] = useState([]);
+	const [studentDocuments, setStudentDocuments] = useState([]);
 	const [selectedImage, setSelectedImage] = useState(null);
 	const [imageZoom, setImageZoom] = useState(1);
 	const [groupByType, setGroupByType] = useState(false);
@@ -37,17 +35,9 @@ export default function ProcessedRequest({
 		return imageExtensions.includes(getFileExtension(filename));
 	};
 
-	// Function to group attachments by requirement type
-	const groupAttachmentsByType = () => {
-		const grouped = {};
-		attachments.forEach((attachment) => {
-			const type = attachment.requirementType || "Unknown Type";
-			if (!grouped[type]) {
-				grouped[type] = [];
-			}
-			grouped[type].push(attachment);
-		});
-		return grouped;
+	// Function to check if file is a PDF
+	const isPdfFile = (filename) => {
+		return getFileExtension(filename) === "pdf";
 	};
 
 	// Image zoom handlers - updated to work with attachment objects
@@ -94,7 +84,20 @@ export default function ProcessedRequest({
 				}
 			};
 
+			const fetchStudentDocuments = async () => {
+				try {
+					const documentsData = await getStudentDocuments(request.id);
+					if (Array.isArray(documentsData)) {
+						setStudentDocuments(documentsData);
+					}
+				} catch (error) {
+					console.error("Failed to fetch student documents:", error);
+					setStudentDocuments([]);
+				}
+			};
+
 			fetchAttachments();
+			fetchStudentDocuments();
 		}
 	}, [isOpen, request]);
 
@@ -129,30 +132,36 @@ export default function ProcessedRequest({
 
 		const statusName = request.status.toLowerCase();
 
+		// Check if student documents are required and available for pending status
+		const hasRequiredDocuments =
+			statusName !== "pending" || studentDocuments.length > 0;
+
 		switch (statusName) {
 			case "pending":
 				return {
 					text: processing ? "Processing..." : "Mark as Processed",
-					bgColor: "bg-green-600 hover:bg-green-700",
-					disabled: false,
+					bgColor: hasRequiredDocuments
+						? "bg-green-600 hover:bg-green-700"
+						: "bg-gray-400",
+					disabled: !hasRequiredDocuments || processing,
 				};
 			case "processed":
 				return {
 					text: processing ? "Processing..." : "Proceed to Signatory",
 					bgColor: "bg-blue-600 hover:bg-blue-700",
-					disabled: false,
+					disabled: processing,
 				};
 			case "signatory":
 				return {
 					text: processing ? "Processing..." : "Release Document",
 					bgColor: "bg-green-600 hover:bg-green-700",
-					disabled: false,
+					disabled: processing,
 				};
 			case "release":
 				return {
 					text: processing ? "Processing..." : "Mark as Released",
 					bgColor: "bg-orange-600 hover:bg-orange-700",
-					disabled: false,
+					disabled: processing,
 				};
 			case "released":
 				return {
@@ -163,8 +172,10 @@ export default function ProcessedRequest({
 			default:
 				return {
 					text: processing ? "Processing..." : "Process Request",
-					bgColor: "bg-green-600 hover:bg-green-700",
-					disabled: false,
+					bgColor: hasRequiredDocuments
+						? "bg-green-600 hover:bg-green-700"
+						: "bg-gray-400",
+					disabled: !hasRequiredDocuments || processing,
 				};
 		}
 	};
@@ -237,7 +248,7 @@ export default function ProcessedRequest({
 			<div className="flex fixed inset-0 z-50 justify-center items-center p-1 backdrop-blur-sm bg-black/50 sm:p-4">
 				<div className="relative w-full max-w-md sm:max-w-2xl lg:max-w-4xl bg-white rounded-lg sm:rounded-xl shadow-2xl max-h-[98vh] sm:max-h-[90vh] overflow-hidden">
 					{/* Header */}
-					<div className="flex justify-between items-center px-4 py-3 text-white bg-gradient-to-r from-blue-600 to-indigo-600 sm:px-6 sm:py-4">
+					<div className="flex justify-between items-center px-4 py-3 text-white bg-[#5409DA] sm:px-6 sm:py-4">
 						<div className="flex gap-2 items-center sm:gap-3">
 							<FileText className="w-5 h-5 sm:w-6 sm:h-6" />
 							<h2 className="text-base font-semibold sm:text-xl">
@@ -246,7 +257,7 @@ export default function ProcessedRequest({
 						</div>
 						<button
 							onClick={onClose}
-							className="p-1.5 sm:p-2 text-black hover:text-gray-200 rounded-full transition-colors"
+							className="p-1.5 sm:p-2 text-white hover:text-gray-200 rounded-full transition-colors"
 							aria-label="Close"
 						>
 							<X className="w-5 h-5" />
@@ -342,279 +353,68 @@ export default function ProcessedRequest({
 								</div>
 							)}
 
+							{/* Student Documents */}
+							<StudentDocumentsSection
+								studentDocuments={studentDocuments}
+								request={request}
+							/>
+
 							{/* Attachments */}
-							{attachments.length > 0 && (
-								<div className="p-4 rounded-lg bg-slate-50">
-									<div className="flex justify-between items-center mb-4">
-										<div className="flex gap-3 items-center">
-											<Paperclip className="w-5 h-5 text-blue-600" />
-											<span className="text-sm font-medium text-slate-600">
-												Attachments ({attachments.length})
-											</span>
-										</div>
-										<button
-											onClick={() => setGroupByType(!groupByType)}
-											className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full border border-blue-200 transition-colors hover:bg-blue-100"
-										>
-											{groupByType ? "List View" : "Group by Type"}
-										</button>
-									</div>
-
-									{groupByType ? (
-										// Grouped view by requirement type
-										<div className="space-y-4">
-											{Object.entries(groupAttachmentsByType()).map(
-												([type, typeAttachments]) => (
-													<div
-														key={type}
-														className="overflow-hidden rounded-lg border border-slate-200"
-													>
-														<div className="px-4 py-2 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-slate-200">
-															<h4 className="text-sm font-semibold tracking-wide text-indigo-800 uppercase">
-																{type} ({typeAttachments.length})
-															</h4>
-														</div>
-														<div className="p-3">
-															<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-																{typeAttachments.map((attachment, index) => (
-																	<div
-																		key={`${type}-${index}`}
-																		className="overflow-hidden bg-white rounded-lg border border-slate-200"
-																	>
-																		{isImageFile(attachment.filepath) ? (
-																			<div>
-																				<div
-																					className="flex overflow-hidden justify-center items-center transition-colors cursor-pointer aspect-video bg-slate-100 hover:bg-slate-200"
-																					onClick={() =>
-																						openImageZoom(attachment)
-																					}
-																					title="Click to zoom"
-																				>
-																					<img
-																						src={`http://localhost/mogchs/backend/requirements/${attachment.filepath}`}
-																						alt={attachment.filepath}
-																						className="object-cover w-full h-full"
-																						onError={(e) => {
-																							e.target.style.display = "none";
-																							e.target.parentElement.innerHTML = `
-																						<div class="flex flex-col justify-center items-center p-4 text-slate-500">
-																							<FileText class="mb-2 w-8 h-8" />
-																							<span class="text-sm">Failed to load image</span>
-																						</div>
-																					`;
-																						}}
-																					/>
-																				</div>
-																				<div className="p-2">
-																					<p className="mb-1 text-xs font-medium truncate text-slate-700">
-																						{attachment.filepath}
-																					</p>
-																					<button
-																						onClick={() =>
-																							openImageZoom(attachment)
-																						}
-																						className="text-xs font-medium text-blue-600 hover:text-blue-800"
-																					>
-																						🔍 Zoom
-																					</button>
-																				</div>
-																			</div>
-																		) : (
-																			<div className="flex gap-2 items-center p-3">
-																				<FileText className="flex-shrink-0 w-6 h-6 text-slate-500" />
-																				<div className="flex-1 min-w-0">
-																					<p className="mb-1 text-xs font-medium truncate text-slate-700">
-																						{attachment.filepath}
-																					</p>
-																					<a
-																						href={`http://localhost/mogchs/backend/requirements/${attachment.filepath}`}
-																						target="_blank"
-																						rel="noopener noreferrer"
-																						className="text-xs font-medium text-blue-600 hover:text-blue-800"
-																					>
-																						📄 Open
-																					</a>
-																				</div>
-																			</div>
-																		)}
-																	</div>
-																))}
-															</div>
-														</div>
-													</div>
-												)
-											)}
-										</div>
-									) : (
-										// Regular grid view
-										<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-											{attachments.map((attachment, index) => (
-												<div
-													key={index}
-													className="overflow-hidden bg-white rounded-lg border shadow-sm border-slate-200"
-												>
-													{/* Requirement Type Header */}
-													<div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-200">
-														<p className="text-xs font-semibold tracking-wide text-blue-800 uppercase">
-															{attachment.requirementType || "Unknown Type"}
-														</p>
-													</div>
-
-													{isImageFile(attachment.filepath) ? (
-														<div>
-															<div
-																className="flex overflow-hidden justify-center items-center transition-colors cursor-pointer aspect-video bg-slate-100 hover:bg-slate-200"
-																onClick={() => openImageZoom(attachment)}
-																title="Click to zoom"
-															>
-																<img
-																	src={`http://localhost/mogchs/backend/requirements/${attachment.filepath}`}
-																	alt={attachment.filepath}
-																	className="object-cover w-full h-full"
-																	onError={(e) => {
-																		e.target.style.display = "none";
-																		e.target.parentElement.innerHTML = `
-																		<div class="flex flex-col justify-center items-center p-4 text-slate-500">
-																			<FileText class="mb-2 w-8 h-8" />
-																			<span class="text-sm">Failed to load image</span>
-																		</div>
-																	`;
-																	}}
-																/>
-															</div>
-															<div className="p-3">
-																<p className="mb-1 text-sm font-medium truncate text-slate-700">
-																	{attachment.filepath}
-																</p>
-																<button
-																	onClick={() => openImageZoom(attachment)}
-																	className="text-xs font-medium text-blue-600 hover:text-blue-800"
-																>
-																	🔍 Click to Zoom
-																</button>
-															</div>
-														</div>
-													) : (
-														<div className="flex gap-3 items-center p-4">
-															<FileText className="flex-shrink-0 w-8 h-8 text-slate-500" />
-															<div className="flex-1 min-w-0">
-																<p className="mb-1 text-sm font-medium truncate text-slate-700">
-																	{attachment.filepath}
-																</p>
-																<a
-																	href={`http://localhost/mogchs/backend/requirements/${attachment.filepath}`}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	className="inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-800"
-																>
-																	📄 Open Document
-																</a>
-															</div>
-														</div>
-													)}
-												</div>
-											))}
-										</div>
-									)}
-								</div>
-							)}
+							<AttachmentsSection
+								attachments={attachments}
+								groupByType={groupByType}
+								setGroupByType={setGroupByType}
+								openImageZoom={openImageZoom}
+								isImageFile={isImageFile}
+							/>
 						</div>
 					</div>
 
 					{/* Actions Footer */}
 					<div className="flex flex-col gap-3 px-4 py-4 border-t sm:flex-row sm:px-6 bg-slate-50 border-slate-200">
-						<Button
-							onClick={handleProcess}
-							disabled={buttonConfig.disabled}
-							className={`w-full sm:flex-1 py-3 text-base font-medium text-white ${buttonConfig.bgColor}`}
-						>
-							{buttonConfig.text}
-						</Button>
-						<Button
-							onClick={onClose}
-							variant="outline"
-							className="py-3 w-full text-base font-medium sm:flex-1"
-						>
-							Cancel
-						</Button>
+						{/* Warning message when documents are missing */}
+						{buttonConfig.reason && (
+							<div className="flex items-center gap-2 p-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+								<span className="text-amber-600">⚠️</span>
+								<span>{buttonConfig.reason}</span>
+							</div>
+						)}
+
+						<div className="flex flex-col gap-3 sm:flex-row w-full">
+							<Button
+								onClick={handleProcess}
+								disabled={buttonConfig.disabled}
+								className={`w-full sm:flex-1 py-3 text-base font-medium text-white ${
+									buttonConfig.bgColor
+								} ${
+									buttonConfig.disabled ? "cursor-not-allowed opacity-75" : ""
+								}`}
+								title={buttonConfig.reason || ""}
+							>
+								{buttonConfig.text}
+							</Button>
+							<Button
+								onClick={onClose}
+								variant="outline"
+								className="py-3 w-full text-base font-medium sm:flex-1"
+							>
+								Cancel
+							</Button>
+						</div>
 					</div>
 				</div>
 			</div>
 
 			{/* Image Zoom Modal */}
 			{selectedImage && (
-				<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-					<div className="flex relative justify-center items-center p-2 w-full h-full sm:p-4">
-						{/* Zoom Controls */}
-						<div className="flex absolute top-2 right-2 z-10 gap-1 sm:top-4 sm:right-4 sm:gap-2">
-							<button
-								onClick={zoomOut}
-								className="p-2 rounded-full shadow-lg transition-colors bg-white/90 hover:bg-white"
-								title="Zoom Out"
-							>
-								<ZoomOut className="w-5 h-5 text-slate-700" />
-							</button>
-							<button
-								onClick={resetZoom}
-								className="p-2 rounded-full shadow-lg transition-colors bg-white/90 hover:bg-white"
-								title="Reset Zoom"
-							>
-								<RotateCcw className="w-5 h-5 text-slate-700" />
-							</button>
-							<button
-								onClick={zoomIn}
-								className="p-2 rounded-full shadow-lg transition-colors bg-white/90 hover:bg-white"
-								title="Zoom In"
-							>
-								<ZoomIn className="w-5 h-5 text-slate-700" />
-							</button>
-							<button
-								onClick={closeImageZoom}
-								className="p-2 rounded-full shadow-lg transition-colors bg-white/90 hover:bg-white"
-								title="Close"
-							>
-								<X className="w-5 h-5 text-slate-700" />
-							</button>
-						</div>
-
-						{/* Zoom Level Indicator */}
-						<div className="absolute top-2 left-2 px-3 py-1 rounded-full shadow-lg sm:top-4 sm:left-4 bg-white/90">
-							<span className="text-sm font-medium text-slate-700">
-								{Math.round(imageZoom * 100)}%
-							</span>
-						</div>
-
-						{/* Image Container */}
-						<div className="overflow-auto max-w-full max-h-full touch-pan-x touch-pan-y">
-							<img
-								src={`http://localhost/mogchs/backend/requirements/${selectedImage.filepath}`}
-								alt={selectedImage.filepath}
-								className="max-w-none transition-transform duration-200"
-								style={{
-									transform: `scale(${imageZoom})`,
-									cursor: imageZoom > 1 ? "grab" : "default",
-									minWidth: "100px",
-									minHeight: "100px",
-								}}
-								onError={(e) => {
-									e.target.style.display = "none";
-								}}
-							/>
-						</div>
-
-						{/* Image Name and Type */}
-						<div className="absolute bottom-2 sm:bottom-4 left-1/2 px-4 py-3 rounded-lg shadow-lg transform -translate-x-1/2 bg-white/95 max-w-[90%] backdrop-blur-sm">
-							<div className="text-center">
-								<span className="block mb-1 text-sm font-medium truncate text-slate-700">
-									{selectedImage.filepath}
-								</span>
-								<span className="block text-xs font-semibold tracking-wide text-blue-600 uppercase">
-									{selectedImage.requirementType || "Unknown Type"}
-								</span>
-							</div>
-						</div>
-					</div>
-				</div>
+				<ImageZoomModal
+					selectedImage={selectedImage}
+					imageZoom={imageZoom}
+					zoomIn={zoomIn}
+					zoomOut={zoomOut}
+					resetZoom={resetZoom}
+					closeImageZoom={closeImageZoom}
+				/>
 			)}
 		</>
 	);

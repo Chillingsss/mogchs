@@ -235,7 +235,81 @@ class User {
 
       if ($stmt->rowCount() > 0) {
         $attachments = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return json_encode($attachments);
+        
+        // Filter attachments to only include those that actually exist in the filesystem
+        $validAttachments = [];
+        foreach ($attachments as $attachment) {
+          $filePath = __DIR__ . '/requirements/' . $attachment['filepath'];
+          if (file_exists($filePath)) {
+            $validAttachments[] = $attachment;
+          }
+        }
+        
+        return json_encode($validAttachments);
+      }
+      return json_encode([]);
+
+    } catch (PDOException $e) {
+      return json_encode(['error' => 'Database error occurred: ' . $e->getMessage()]);
+    }
+  }
+
+  function getStudentDocuments($json)
+  {
+    include "connection.php";
+
+    $json = json_decode($json, true);
+    $requestId = $json['requestId'];
+
+    try {
+      // First get the student ID and document ID from the request
+      $studentSql = "SELECT r.studentId, r.documentId, d.name as requestedDocumentType 
+                     FROM tblrequest r
+                     INNER JOIN tbldocument d ON r.documentId = d.id
+                     WHERE r.id = :requestId";
+      $studentStmt = $conn->prepare($studentSql);
+      $studentStmt->bindParam(':requestId', $requestId);
+      $studentStmt->execute();
+      
+      if ($studentStmt->rowCount() == 0) {
+        return json_encode(['error' => 'Request not found']);
+      }
+      
+      $requestData = $studentStmt->fetch(PDO::FETCH_ASSOC);
+      $studentId = $requestData['studentId'];
+      $documentId = $requestData['documentId'];
+
+      // Get student documents that match the requested document type only
+      $sql = "SELECT 
+                sd.id,
+                sd.documentId,
+                sd.fileName,
+                sd.createdAt,
+                d.name as documentType
+              FROM tblstudentdocument sd
+              LEFT JOIN tbldocument d ON sd.documentId = d.id
+              WHERE sd.studentId = :studentId 
+              AND sd.documentId = :documentId
+              ORDER BY sd.createdAt DESC";
+      
+      $stmt = $conn->prepare($sql);
+      $stmt->bindParam(':studentId', $studentId);
+      $stmt->bindParam(':documentId', $documentId);
+      $stmt->execute();
+
+      if ($stmt->rowCount() > 0) {
+        $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Filter documents to only include those that actually exist in the filesystem
+        $validDocuments = [];
+        foreach ($documents as $document) {
+          $filePath = __DIR__ . '/documents/' . $document['fileName'];
+          if (file_exists($filePath)) {
+            $validDocuments[] = $document;
+          }
+        }
+        
+        return json_encode($validDocuments);
       }
       return json_encode([]);
 
@@ -273,6 +347,9 @@ switch ($operation) {
     break;
   case "getRequestAttachments":
     echo $user->getRequestAttachments($json);
+    break;
+  case "getStudentDocuments":
+    echo $user->getStudentDocuments($json);
     break;
   default:
     echo json_encode("WALA KA NAGBUTANG OG OPERATION SA UBOS HAHAHHA BOBO");
