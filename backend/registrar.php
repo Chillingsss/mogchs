@@ -221,7 +221,14 @@ class User {
     $requestId = $json['requestId'];
 
     try {
-      $sql = "SELECT filepath FROM tblrequirements WHERE requestId = :requestId ORDER BY createdAt ASC";
+      $sql = "SELECT 
+                req.filepath,
+                rt.nameType as requirementType,
+                req.createdAt
+              FROM tblrequirements req
+              LEFT JOIN tblrequirementstype rt ON req.typeId = rt.id
+              WHERE req.requestId = :requestId 
+              ORDER BY req.createdAt ASC";
       $stmt = $conn->prepare($sql);
       $stmt->bindParam(':requestId', $requestId);
       $stmt->execute();

@@ -80,12 +80,19 @@ class User {
           }
 
           if (move_uploaded_file($_FILES['attachment']['tmp_name'], $filePath)) {
+            // Get the first typeId for single file upload
+            $currentTypeId = isset($json['typeIds'][0]) ? $json['typeIds'][0] : null;
+            
+            if (!$currentTypeId) {
+              throw new PDOException("Missing requirement type for attachment");
+            }
+
             // Insert into tblrequirements - store only filename without path
             $reqSql = "INSERT INTO tblrequirements (requestId, filepath, typeId, createdAt) VALUES (:requestId, :filepath, :typeId, :datetime)";
             $reqStmt = $conn->prepare($reqSql);
             $reqStmt->bindParam(':requestId', $requestId);
             $reqStmt->bindParam(':filepath', $originalFileName);
-            $reqStmt->bindParam(':typeId', $json['typeId']);
+            $reqStmt->bindParam(':typeId', $currentTypeId);
             $reqStmt->bindParam(':datetime', $philippineDateTime);
             
             if (!$reqStmt->execute()) {
@@ -137,12 +144,19 @@ class User {
             $filePath = $uploadDir . $originalFileName;
 
             if (move_uploaded_file($fileTmpName, $filePath)) {
+              // Get the corresponding typeId for this file
+              $currentTypeId = isset($json['typeIds'][$i]) ? $json['typeIds'][$i] : null;
+              
+              if (!$currentTypeId) {
+                throw new PDOException("Missing requirement type for file '$originalFileName'");
+              }
+
               // Insert into tblrequirements - store only filename without path
               $reqSql = "INSERT INTO tblrequirements (requestId, filepath, typeId, createdAt) VALUES (:requestId, :filepath, :typeId, :datetime)";
               $reqStmt = $conn->prepare($reqSql);
               $reqStmt->bindParam(':requestId', $requestId);
               $reqStmt->bindParam(':filepath', $originalFileName); // Store only filename
-              $reqStmt->bindParam(':typeId', $json['typeId']);
+              $reqStmt->bindParam(':typeId', $currentTypeId);
               $reqStmt->bindParam(':datetime', $philippineDateTime);
               
               if ($reqStmt->execute()) {
@@ -219,7 +233,21 @@ class User {
       return json_encode(['error' => 'Database error occurred: ' . $e->getMessage()]);
     }
   }
-    
+
+  function getRequirementsType()
+  {
+    include "connection.php";
+
+    $sql = "SELECT * FROM tblrequirementstype";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute();
+
+    if ($stmt->rowCount() > 0) {
+      $requestTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      return json_encode($requestTypes);
+    }
+    return json_encode([]);
+  }
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -240,6 +268,9 @@ switch ($operation) {
     break;
   case "getUserRequests":
     echo $user->getUserRequests($json);
+    break;
+  case "getRequirementsType":
+    echo $user->getRequirementsType();
     break;
   default:
     echo json_encode("WALA KA NAGBUTANG OG OPERATION SA UBOS HAHAHHA BOBO");

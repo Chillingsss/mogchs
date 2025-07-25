@@ -487,7 +487,10 @@ export default function RegistrarDashboard() {
 										type="date"
 										value={customDate}
 										onChange={(e) => handleCustomDateChange(e.target.value)}
-										className="px-3 py-1 text-xs rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="px-3 py-1 text-xs text-black bg-white rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:filter-none [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+										style={{
+											colorScheme: "light",
+										}}
 										placeholder="Custom date"
 									/>
 								</div>
