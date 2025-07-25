@@ -4,6 +4,7 @@ import { Label } from "@radix-ui/react-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import toast from "react-hot-toast";
 
 export default function PinVerification({ user, onPinVerified, onCancel }) {
 	const [pin, setPin] = useState("");
@@ -18,15 +19,18 @@ export default function PinVerification({ user, onPinVerified, onCancel }) {
 		// Validate PIN format
 		if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
 			setError("PIN must be exactly 4 digits");
+			toast.error("PIN must be exactly 4 digits");
 			setIsLoading(false);
 			return;
 		}
 
 		// Check if PIN matches the user's stored PIN
 		if (parseInt(pin) === parseInt(user.pinCode)) {
+			toast.success("PIN verified successfully!");
 			onPinVerified();
 		} else {
 			setError("Invalid PIN code. Please try again.");
+			toast.error("Invalid PIN code. Please try again.");
 		}
 
 		setIsLoading(false);
