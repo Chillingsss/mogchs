@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import CryptoJS from "crypto-js";
 import Cookies from "js-cookie";
 import { loginUser } from "@/utils/security";
+import PinVerification from "@/components/PinVerification";
 
 const COOKIE_KEY = "mogchs_user";
 const SECRET_KEY = "mogchs_secret_key"; // You can use a more secure key in production
@@ -19,6 +20,8 @@ export default function LoginPage() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
+	const [showPinVerification, setShowPinVerification] = useState(false);
+	const [pendingUser, setPendingUser] = useState(null);
 
 	const navigate = useNavigate();
 
@@ -41,6 +44,30 @@ export default function LoginPage() {
 		}
 	}, [navigate]);
 
+	const handlePinVerified = () => {
+		if (pendingUser) {
+			// Store user data in cookie after successful PIN verification
+			const encrypted = CryptoJS.AES.encrypt(
+				JSON.stringify(pendingUser),
+				SECRET_KEY
+			).toString();
+			Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
+
+			// Navigate to appropriate dashboard
+			if (pendingUser.userLevel === "Admin") {
+				navigate("/AdminDashboard");
+			} else if (pendingUser.userLevel === "Registrar") {
+				navigate("/RegistrarDashboard");
+			}
+		}
+	};
+
+	const handlePinCancel = () => {
+		setShowPinVerification(false);
+		setPendingUser(null);
+		setIsLoading(false);
+	};
+
 	const handleSubmit = async (event) => {
 		event.preventDefault();
 		setIsLoading(true);
@@ -49,21 +76,19 @@ export default function LoginPage() {
 		try {
 			const user = await loginUser(username, password);
 			console.log("user", user);
+
 			if (user && user.userLevel === "Admin") {
-				const encrypted = CryptoJS.AES.encrypt(
-					JSON.stringify(user),
-					SECRET_KEY
-				).toString();
-				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
-				navigate("/AdminDashboard");
+				// Admin needs PIN verification
+				setPendingUser(user);
+				setShowPinVerification(true);
+				setIsLoading(false);
 			} else if (user && user.userLevel === "Registrar") {
-				const encrypted = CryptoJS.AES.encrypt(
-					JSON.stringify(user),
-					SECRET_KEY
-				).toString();
-				Cookies.set(COOKIE_KEY, encrypted, { expires: 1 }); // 1 day expiry
-				navigate("/RegistrarDashboard");
+				// Registrar needs PIN verification
+				setPendingUser(user);
+				setShowPinVerification(true);
+				setIsLoading(false);
 			} else if (user && user.userLevel === "Student") {
+				// Student goes directly to dashboard (no PIN required)
 				const encrypted = CryptoJS.AES.encrypt(
 					JSON.stringify(user),
 					SECRET_KEY
@@ -72,13 +97,24 @@ export default function LoginPage() {
 				navigate("/StudentDashboard");
 			} else {
 				alert("Invalid credentials or unauthorized access");
+				setIsLoading(false);
 			}
 		} catch (err) {
 			alert("Login failed");
-		} finally {
 			setIsLoading(false);
 		}
 	};
+
+	// Show PIN verification screen if needed
+	if (showPinVerification && pendingUser) {
+		return (
+			<PinVerification
+				user={pendingUser}
+				onPinVerified={handlePinVerified}
+				onCancel={handlePinCancel}
+			/>
+		);
+	}
 
 	return (
 		<div className="flex justify-center items-center p-4 w-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">

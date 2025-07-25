@@ -81,10 +81,11 @@ class User {
 
           if (move_uploaded_file($_FILES['attachment']['tmp_name'], $filePath)) {
             // Insert into tblrequirements - store only filename without path
-            $reqSql = "INSERT INTO tblrequirements (requestId, filepath, createdAt) VALUES (:requestId, :filepath, :datetime)";
+            $reqSql = "INSERT INTO tblrequirements (requestId, filepath, typeId, createdAt) VALUES (:requestId, :filepath, :typeId, :datetime)";
             $reqStmt = $conn->prepare($reqSql);
             $reqStmt->bindParam(':requestId', $requestId);
-            $reqStmt->bindParam(':filepath', $originalFileName); // Store only filename
+            $reqStmt->bindParam(':filepath', $originalFileName);
+            $reqStmt->bindParam(':typeId', $json['typeId']);
             $reqStmt->bindParam(':datetime', $philippineDateTime);
             
             if (!$reqStmt->execute()) {
@@ -137,10 +138,11 @@ class User {
 
             if (move_uploaded_file($fileTmpName, $filePath)) {
               // Insert into tblrequirements - store only filename without path
-              $reqSql = "INSERT INTO tblrequirements (requestId, filepath, createdAt) VALUES (:requestId, :filepath, :datetime)";
+              $reqSql = "INSERT INTO tblrequirements (requestId, filepath, typeId, createdAt) VALUES (:requestId, :filepath, :typeId, :datetime)";
               $reqStmt = $conn->prepare($reqSql);
               $reqStmt->bindParam(':requestId', $requestId);
               $reqStmt->bindParam(':filepath', $originalFileName); // Store only filename
+              $reqStmt->bindParam(':typeId', $json['typeId']);
               $reqStmt->bindParam(':datetime', $philippineDateTime);
               
               if ($reqStmt->execute()) {
