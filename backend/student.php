@@ -397,6 +397,40 @@ class User {
     }
     return json_encode([]);
   }
+
+  function getRequestTracking($json)
+  {
+    include "connection.php";
+
+    $json = json_decode($json, true);
+    $requestId = $json['requestId'];
+
+    try {
+      $sql = "SELECT 
+                rs.id,
+                s.name as status,
+                s.id as statusId,
+                rs.createdAt,
+                DATE_FORMAT(rs.createdAt, '%m/%d/%Y') as dateFormatted
+              FROM tblrequeststatus rs
+              INNER JOIN tblstatus s ON rs.statusId = s.id
+              WHERE rs.requestId = :requestId
+              ORDER BY rs.id ASC";
+
+      $stmt = $conn->prepare($sql);
+      $stmt->bindParam(':requestId', $requestId);
+      $stmt->execute();
+
+      if ($stmt->rowCount() > 0) {
+        $tracking = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return json_encode($tracking);
+      }
+      return json_encode([]);
+
+    } catch (PDOException $e) {
+      return json_encode(['error' => 'Database error occurred: ' . $e->getMessage()]);
+    }
+  }
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -423,6 +457,9 @@ switch ($operation) {
     break;
   case "getRequirementsType":
     echo $user->getRequirementsType();
+    break;
+  case "getRequestTracking":
+    echo $user->getRequestTracking($json);
     break;
   default:
     echo json_encode("WALA KA NAGBUTANG OG OPERATION SA UBOS HAHAHHA BOBO");
